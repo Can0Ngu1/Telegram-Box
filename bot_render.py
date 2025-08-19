@@ -4,7 +4,7 @@ import time
 import asyncio
 from datetime import datetime
 from urllib.parse import quote_plus
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -12,6 +12,8 @@ from telegram import Bot
 import logging
 from datetime import timezone
 import pytz
+from flask import Flask
+import threading
 
 # Thiết lập logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,15 +32,22 @@ NOTIFIED_BIDDINGS_FILE = 'notified_biddings.json'
 # Múi giờ Việt Nam
 VIETNAM_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
 
+# Flask app để đáp ứng yêu cầu cổng
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bidding Bot is running!"
+
 # Hàm kiểm tra khung giờ làm việc (GMT+7)
 def is_within_working_hours():
     now = datetime.now(VIETNAM_TZ)
     hour = now.hour
-    return 8 <= hour < 20  # True nếu trong 8:00 - 19:59 GMT+7
+    return 8 <= hour < 20
 
 # Hàm xây dựng URL tìm kiếm
 def build_bidding_url():
-    sfrom = quote_plus('15/08/2025')  # Ngày bắt đầu tìm kiếm
+    sfrom = quote_plus('15/08/2025')
     keyword = quote_plus('Chiếu sáng')
     return f"https://dauthau.asia/tenders/?sfrom={sfrom}&keyword={keyword}"
 
@@ -63,12 +72,11 @@ def check_biddings():
     
     try:
         driver.get(url)
-        time.sleep(5)  # Đợi trang tải
+        time.sleep(5)
         soup = BeautifulSoup(driver.page_source, 'lxml')
         
-        # Giả định cấu trúc HTML
         biddings = []
-        bidding_elements = soup.select('div.bidding-item')  # Điều chỉnh selector
+        bidding_elements = soup.select('div.bidding-item')
         
         for elem in bidding_elements:
             bidding = {
@@ -81,11 +89,9 @@ def check_biddings():
             }
             biddings.append(bidding)
         
-        # Lưu danh sách gói thầu
         with open(BIDDINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(biddings, f, ensure_ascii=False, indent=2)
         
-        # Đọc danh sách đã thông báo
         notified_biddings = []
         if os.path.exists(NOTIFIED_BIDDINGS_FILE):
             with open(NOTIFIED_BIDDINGS_FILE, 'r', encoding='utf-8') as f:
@@ -94,7 +100,6 @@ def check_biddings():
         notified_ids = {b['id'] for b in notified_biddings}
         new_biddings = [b for b in biddings if b['id'] not in notified_ids]
         
-        # Gửi thông báo cho gói thầu mới
         if new_biddings:
             bot = Bot(token=TELEGRAM_TOKEN)
             message = "🔔 PHÁT HIỆN {} GÓI THẦU MỚI\n".format(len(new_biddings))
@@ -109,7 +114,6 @@ def check_biddings():
                 )
             asyncio.run(send_telegram_message(bot, CHAT_ID, message))
             
-            # Cập nhật danh sách đã thông báo
             notified_biddings.extend(new_biddings)
             with open(NOTIFIED_BIDDINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(notified_biddings, f, ensure_ascii=False, indent=2)
@@ -142,8 +146,7 @@ def scheduled_job():
     else:
         logger.info("Bot nghỉ - ngoài khung giờ 8:00 - 20:00")
 
-def main():
-    # Gửi thông báo khởi động
+def start_bot():
     bot = Bot(token=TELEGRAM_TOKEN)
     message = (
         f"🤖 BOT THEO DÕI GÓI THẦU ĐÃ KHỞI ĐỘNG\n"
@@ -154,18 +157,15 @@ def main():
     )
     asyncio.run(send_telegram_message(bot, CHAT_ID, message))
     
-    # Khởi tạo scheduler
-    scheduler = BlockingScheduler(timezone=VIETNAM_TZ)
-    
-    # Thêm công việc kiểm tra gói thầu
+    scheduler = BackgroundScheduler(timezone=VIETNAM_TZ)
     scheduler.add_job(scheduled_job, 'interval', minutes=CHECK_INTERVAL_MINUTES)
-    
-    # Thêm công việc heartbeat (mỗi 12 giờ)
     scheduler.add_job(send_heartbeat, 'interval', hours=12)
-    
-    # Bắt đầu scheduler
-    logger.info("Khởi động scheduler...")
     scheduler.start()
 
 if __name__ == "__main__":
-    main()
+    # Chạy bot trong thread riêng
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.start()
+    
+    # Chạy Flask server
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 10000)))
