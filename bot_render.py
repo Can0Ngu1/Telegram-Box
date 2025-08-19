@@ -9,6 +9,8 @@ from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from telegram import Bot
 import logging
+from datetime import timezone
+import pytz
 
 # Thiết lập logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,11 +26,14 @@ RENDER = os.getenv('RENDER', 'false').lower() == 'true'
 BIDDINGS_FILE = 'biddings.json'
 NOTIFIED_BIDDINGS_FILE = 'notified_biddings.json'
 
-# Hàm kiểm tra khung giờ làm việc
+# Múi giờ Việt Nam
+VIETNAM_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
+
+# Hàm kiểm tra khung giờ làm việc (GMT+7)
 def is_within_working_hours():
-    now = datetime.now()
+    now = datetime.now(VIETNAM_TZ)
     hour = now.hour
-    return 8 <= hour < 20  # True nếu trong 8:00 - 19:59
+    return 8 <= hour < 20  # True nếu trong 8:00 - 19:59 GMT+7
 
 # Hàm xây dựng URL tìm kiếm
 def build_bidding_url():
@@ -40,7 +45,6 @@ def build_bidding_url():
 def check_biddings():
     logger.info("Bắt đầu kiểm tra gói thầu...")
     
-    # Thiết lập Selenium
     chrome_options = Options()
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
@@ -54,9 +58,9 @@ def check_biddings():
         time.sleep(5)  # Đợi trang tải
         soup = BeautifulSoup(driver.page_source, 'lxml')
         
-        # Giả định cấu trúc HTML của dauthau.asia
+        # Giả định cấu trúc HTML
         biddings = []
-        bidding_elements = soup.select('div.bidding-item')  # Cần điều chỉnh selector
+        bidding_elements = soup.select('div.bidding-item')  # Điều chỉnh selector
         
         for elem in bidding_elements:
             bidding = {
@@ -115,7 +119,7 @@ def send_heartbeat():
     bot = Bot(token=TELEGRAM_TOKEN)
     message = (
         f"💓 HEARTBEAT BOT\n"
-        f"🕐 {datetime.now().strftime('%H:%M:%S - %d/%m/%Y')}\n"
+        f"🕐 {datetime.now(VIETNAM_TZ).strftime('%H:%M:%S - %d/%m/%Y')}\n"
         f"📊 Đã theo dõi: {len(json.load(open(BIDDINGS_FILE))) if os.path.exists(BIDDINGS_FILE) else 0} gói thầu\n"
         f"🔄 Kiểm tra tiếp theo: {CHECK_INTERVAL_MINUTES} phút\n"
         f"✅ Bot đang hoạt động bình thường"
@@ -135,7 +139,7 @@ def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     message = (
         f"🤖 BOT THEO DÕI GÓI THẦU ĐÃ KHỞI ĐỘNG\n"
-        f"🕐 Thời gian khởi động: {datetime.now().strftime('%H:%M:%S - %d/%m/%Y')}\n"
+        f"🕐 Thời gian khởi động: {datetime.now(VIETNAM_TZ).strftime('%H:%M:%S - %d/%m/%Y')}\n"
         f"⏱️ Kiểm tra mỗi: {CHECK_INTERVAL_MINUTES} phút\n"
         f"🎯 Từ khóa tìm kiếm: Chiếu sáng\n"
         f"✅ Bot đang hoạt động và sẵn sàng theo dõi gói thầu mới!"
@@ -143,7 +147,7 @@ def main():
     bot.send_message(chat_id=CHAT_ID, text=message)
     
     # Khởi tạo scheduler
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(timezone=VIETNAM_TZ)
     
     # Thêm công việc kiểm tra gói thầu
     scheduler.add_job(scheduled_job, 'interval', minutes=CHECK_INTERVAL_MINUTES)
