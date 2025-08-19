@@ -1,5 +1,5 @@
 services:
-  - type: worker  # Background Worker cho bot chạy nền
+  - type: worker  # Sử dụng Background Worker thay vì Web Service
     name: bidding-bot
     env: docker
     plan: free
