@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import asyncio
 from datetime import datetime
 from urllib.parse import quote_plus
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -40,6 +41,13 @@ def build_bidding_url():
     sfrom = quote_plus('15/08/2025')  # Ngày bắt đầu tìm kiếm
     keyword = quote_plus('Chiếu sáng')
     return f"https://dauthau.asia/tenders/?sfrom={sfrom}&keyword={keyword}"
+
+# Hàm gửi tin nhắn Telegram bất đồng bộ
+async def send_telegram_message(bot, chat_id, message):
+    try:
+        await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Lỗi khi gửi tin nhắn Telegram: {str(e)}")
 
 # Hàm kiểm tra gói thầu
 def check_biddings():
@@ -99,7 +107,7 @@ def check_biddings():
                     f"⏰ Ngày đóng thầu: {bidding['closing_date']}\n"
                     f"🔗 [Xem chi tiết]({bidding['link']})\n\n"
                 )
-            bot.send_message(chat_id=CHAT_ID, text=message, parse_mode='Markdown')
+            asyncio.run(send_telegram_message(bot, CHAT_ID, message))
             
             # Cập nhật danh sách đã thông báo
             notified_biddings.extend(new_biddings)
@@ -124,7 +132,7 @@ def send_heartbeat():
         f"🔄 Kiểm tra tiếp theo: {CHECK_INTERVAL_MINUTES} phút\n"
         f"✅ Bot đang hoạt động bình thường"
     )
-    bot.send_message(chat_id=CHAT_ID, text=message)
+    asyncio.run(send_telegram_message(bot, CHAT_ID, message))
 
 # Hàm công việc định kỳ
 def scheduled_job():
@@ -144,7 +152,7 @@ def main():
         f"🎯 Từ khóa tìm kiếm: Chiếu sáng\n"
         f"✅ Bot đang hoạt động và sẵn sàng theo dõi gói thầu mới!"
     )
-    bot.send_message(chat_id=CHAT_ID, text=message)
+    asyncio.run(send_telegram_message(bot, CHAT_ID, message))
     
     # Khởi tạo scheduler
     scheduler = BlockingScheduler(timezone=VIETNAM_TZ)
