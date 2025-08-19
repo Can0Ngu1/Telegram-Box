@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: worker  # Background Worker cho bot chạy nền
     name: bidding-bot
     env: docker
     plan: free
