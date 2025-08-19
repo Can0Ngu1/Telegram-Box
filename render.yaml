@@ -1,5 +1,5 @@
 services:
-  - type: worker  # Sử dụng Background Worker thay vì Web Service
+  - type: web
     name: bidding-bot
     env: docker
     plan: free
@@ -12,3 +12,5 @@ services:
         value: 10
       - key: RENDER
         value: true
+      - key: PORT
+        value: 10000
