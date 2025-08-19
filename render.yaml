@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: bidding-bot
+    env: docker
+    plan: free
+    envVars:
+      - key: TELEGRAM_TOKEN
+        value: 7413526182:AAHbqSltL84gIp3xL60B2RKtu5_zbXk1C-8
+      - key: CHAT_ID
+        value: -4788707953
+      - key: CHECK_INTERVAL_MINUTES
+        value: 10
+      - key: RENDER
+        value: true
